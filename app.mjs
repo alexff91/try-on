@@ -17,13 +17,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const port = 3000;
+const port = 8080;
 const host = '0.0.0.0';
 
 const upload = multer({ dest: "uploads/" });
 const hf = new HfInference(process.env.HUGGING_FACE_API_KEY);
 
-app.use(express.json({ limit: '50mb' })); // Increase the limit if needed
+// Increase the payload limit
+app.use(express.json({ limit: '50mb' })); // Increase the limit to 50mb or as needed
 
 const readLocalFile = (filePath) => {
   return new Promise((resolve, reject) => {
@@ -88,8 +89,8 @@ app.post("/tryon", upload.fields([{ name: "humanImage" }, { name: "garmentImage"
     }
 
     // Resize images
-    await resizeImage(humanImagePath, humanImageResizedPath, 400, 600);
-    await resizeImage(garmentImagePath, garmentImageResizedPath, 400, 600);
+    await resizeImage(humanImagePath, humanImageResizedPath, 128, 128);
+    await resizeImage(garmentImagePath, garmentImageResizedPath, 128, 128);
 
     const humanImageBuffer = await readLocalFile(humanImageResizedPath);
     const garmentImageBuffer = await readLocalFile(garmentImageResizedPath);
@@ -143,8 +144,8 @@ app.post("/tryon/base64", async (req, res) => {
     const humanImageResizedPath = path.join(__dirname, "uploads", "humanImage_resized.jpg");
     const garmentImageResizedPath = path.join(__dirname, "uploads", "garmentImage_resized.jpg");
 
-    await resizeImage(humanImagePath, humanImageResizedPath, 400, 600);
-    await resizeImage(garmentImagePath, garmentImageResizedPath, 400, 600);
+    await resizeImage(humanImagePath, humanImageResizedPath, 128, 128);
+    await resizeImage(garmentImagePath, garmentImageResizedPath, 128, 128);
 
     const resizedHumanImageBuffer = await readLocalFile(humanImageResizedPath);
     const resizedGarmentImageBuffer = await readLocalFile(garmentImageResizedPath);
