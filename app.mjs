@@ -108,20 +108,17 @@ app.post("/tryon", upload.fields([{ name: "humanImage" }, { name: "garmentImage"
     const humanImageBuffer = await readLocalFile(humanImageResizedPath);
     const garmentImageBuffer = await readLocalFile(garmentImageResizedPath);
 
-    const humanImageBase64 = bufferToBase64(humanImageBuffer);
-    const garmentImageBase64 = bufferToBase64(garmentImageBuffer);
-
     // Use provided description or default description
     const garmentDescription = req.body.garmentDescription || "cloth fitting the person shape";
 
     console.log("Sending prediction request to the model");
     const result = await appClient.predict("/tryon", [
       {
-        "background": humanImageBase64,
+        "background": humanImageBuffer,
         "layers": [],
         "composite": null
       },
-      garmentImageBase64,
+      garmentImageBuffer,
       garmentDescription,  // Description of garment
       true,  // Use auto-generated mask
       true,  // Use auto-crop & resizing
@@ -129,11 +126,11 @@ app.post("/tryon", upload.fields([{ name: "humanImage" }, { name: "garmentImage"
       42  // Seed
     ]);
 
-    console.log("Prediction completed successfully");
+    console.log("Prediction completed successfully", result);
     res.json({ result: result.data });
   } catch (error) {
-    console.error("Error during prediction:", error);
-    res.status(500).json({ error: error.message });
+    console.error("Error during prediction:", error.response ? error.response.data : error.message);
+    res.status(500).json({ error: error.response ? error.response.data : error.message });
   }
 });
 
@@ -166,17 +163,14 @@ app.post("/tryon/base64", async (req, res) => {
     const resizedHumanImageBuffer = await readLocalFile(humanImageResizedPath);
     const resizedGarmentImageBuffer = await readLocalFile(garmentImageResizedPath);
 
-    const resizedHumanImageBase64 = bufferToBase64(resizedHumanImageBuffer);
-    const resizedGarmentImageBase64 = bufferToBase64(resizedGarmentImageBuffer);
-
     console.log("Sending prediction request to the model");
     const result = await appClient.predict("/tryon", [
       {
-        "background": resizedHumanImageBase64,
+        "background": resizedHumanImageBuffer,
         "layers": [],
         "composite": null
       },
-      resizedGarmentImageBase64,
+      resizedGarmentImageBuffer,
       garmentDescription,
       true,
       true,
@@ -191,8 +185,8 @@ app.post("/tryon/base64", async (req, res) => {
     console.log("Prediction completed successfully");
     res.json({ result: outputImageBase64 });
   } catch (error) {
-    console.error("Error during prediction:", error);
-    res.status(500).json({ error: error.message });
+    console.error("Error during prediction:", error.response ? error.response.data : error.message);
+    res.status(500).json({ error: error.response ? error.response.data : error.message });
   }
 });
 
