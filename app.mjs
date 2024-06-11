@@ -39,22 +39,32 @@ const readLocalFile = (filePath) => {
 };
 
 const downloadImage = async (url, filepath) => {
+  console.log(`Downloading image from ${url} to ${filepath}`);
   const response = await axios({
     url,
     responseType: "stream",
+    timeout: 60000 // 60 seconds timeout
   });
   return new Promise((resolve, reject) => {
     const writer = fs.createWriteStream(filepath);
     response.data.pipe(writer);
-    writer.on("finish", () => resolve());
-    writer.on("error", reject);
+    writer.on("finish", () => {
+      console.log(`Image downloaded to ${filepath}`);
+      resolve();
+    });
+    writer.on("error", (err) => {
+      console.error(`Error downloading image: ${err.message}`);
+      reject(err);
+    });
   });
 };
 
 const resizeImage = async (inputPath, outputPath, width, height) => {
+  console.log(`Resizing image ${inputPath} to ${width}x${height} at ${outputPath}`);
   await sharp(inputPath)
     .resize(width, height)
     .toFile(outputPath);
+  console.log(`Image resized to ${outputPath}`);
 };
 
 const bufferToBase64 = (buffer) => {
@@ -67,6 +77,7 @@ const base64ToBuffer = (base64) => {
 
 app.post("/tryon", upload.fields([{ name: "humanImage" }, { name: "garmentImage" }]), async (req, res) => {
   try {
+    console.log("Received /tryon request");
     const appClient = await client("alexff91/FitMirror");
 
     let humanImagePath;
@@ -76,6 +87,7 @@ app.post("/tryon", upload.fields([{ name: "humanImage" }, { name: "garmentImage"
 
     if (req.files && req.files.humanImage) {
       humanImagePath = req.files.humanImage[0].path;
+      console.log(`Human image uploaded: ${humanImagePath}`);
     } else if (req.body.humanImageURL) {
       humanImagePath = path.join(__dirname, "uploads", "humanImage.jpg");
       await downloadImage(req.body.humanImageURL, humanImagePath);
@@ -83,14 +95,15 @@ app.post("/tryon", upload.fields([{ name: "humanImage" }, { name: "garmentImage"
 
     if (req.files && req.files.garmentImage) {
       garmentImagePath = req.files.garmentImage[0].path;
+      console.log(`Garment image uploaded: ${garmentImagePath}`);
     } else if (req.body.garmentImageURL) {
       garmentImagePath = path.join(__dirname, "uploads", "garmentImage.jpg");
       await downloadImage(req.body.garmentImageURL, garmentImagePath);
     }
 
     // Resize images
-    await resizeImage(humanImagePath, humanImageResizedPath, 128, 128);
-    await resizeImage(garmentImagePath, garmentImageResizedPath, 128, 128);
+    await resizeImage(humanImagePath, humanImageResizedPath, 400, 600);
+    await resizeImage(garmentImagePath, garmentImageResizedPath, 400, 600);
 
     const humanImageBuffer = await readLocalFile(humanImageResizedPath);
     const garmentImageBuffer = await readLocalFile(garmentImageResizedPath);
@@ -101,6 +114,7 @@ app.post("/tryon", upload.fields([{ name: "humanImage" }, { name: "garmentImage"
     // Use provided description or default description
     const garmentDescription = req.body.garmentDescription || "cloth fitting the person shape";
 
+    console.log("Sending prediction request to the model");
     const result = await appClient.predict("/tryon", [
       {
         "background": humanImageBase64,
@@ -115,6 +129,7 @@ app.post("/tryon", upload.fields([{ name: "humanImage" }, { name: "garmentImage"
       42  // Seed
     ]);
 
+    console.log("Prediction completed successfully");
     res.json({ result: result.data });
   } catch (error) {
     console.error("Error during prediction:", error);
@@ -124,6 +139,7 @@ app.post("/tryon", upload.fields([{ name: "humanImage" }, { name: "garmentImage"
 
 app.post("/tryon/base64", async (req, res) => {
   try {
+    console.log("Received /tryon/base64 request");
     const appClient = await client("alexff91/FitMirror");
 
     const { humanImageBase64, garmentImageBase64, garmentDescription = "cloth fitting the person shape" } = req.body;
@@ -144,8 +160,8 @@ app.post("/tryon/base64", async (req, res) => {
     const humanImageResizedPath = path.join(__dirname, "uploads", "humanImage_resized.jpg");
     const garmentImageResizedPath = path.join(__dirname, "uploads", "garmentImage_resized.jpg");
 
-    await resizeImage(humanImagePath, humanImageResizedPath, 128, 128);
-    await resizeImage(garmentImagePath, garmentImageResizedPath, 128, 128);
+    await resizeImage(humanImagePath, humanImageResizedPath, 400, 600);
+    await resizeImage(garmentImagePath, garmentImageResizedPath, 400, 600);
 
     const resizedHumanImageBuffer = await readLocalFile(humanImageResizedPath);
     const resizedGarmentImageBuffer = await readLocalFile(garmentImageResizedPath);
@@ -153,6 +169,7 @@ app.post("/tryon/base64", async (req, res) => {
     const resizedHumanImageBase64 = bufferToBase64(resizedHumanImageBuffer);
     const resizedGarmentImageBase64 = bufferToBase64(resizedGarmentImageBuffer);
 
+    console.log("Sending prediction request to the model");
     const result = await appClient.predict("/tryon", [
       {
         "background": resizedHumanImageBase64,
@@ -171,6 +188,7 @@ app.post("/tryon/base64", async (req, res) => {
     const outputImageResponse = await axios.get(outputUrl, { responseType: 'arraybuffer' });
     const outputImageBase64 = Buffer.from(outputImageResponse.data, 'binary').toString('base64');
 
+    console.log("Prediction completed successfully");
     res.json({ result: outputImageBase64 });
   } catch (error) {
     console.error("Error during prediction:", error);
