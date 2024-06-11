@@ -1,28 +1,29 @@
-import express from "express";
-import multer from "multer";
-import axios from "axios";
-import sharp from "sharp";
-import { client } from "@gradio/client";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-import { HfInference } from "@huggingface/inference";
-import dotenv from "dotenv";
+import express from 'express';
+import multer from 'multer';
+import axios from 'axios';
+import sharp from 'sharp';
+import { client } from '@gradio/client';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { HfInference } from '@huggingface/inference';
+import dotenv from 'dotenv';
 
 // Load environment variables from .env file
 dotenv.config();
 
-// Derive __dirname from import.meta.url
+// Derive __filename and __dirname from import.meta.url
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = 3000;
+const host = '0.0.0.0';
 
 const upload = multer({ dest: "uploads/" });
 const hf = new HfInference(process.env.HUGGING_FACE_API_KEY);
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' })); // Increase the limit if needed
 
 const readLocalFile = (filePath) => {
   return new Promise((resolve, reject) => {
@@ -55,6 +56,14 @@ const resizeImage = async (inputPath, outputPath, width, height) => {
     .toFile(outputPath);
 };
 
+const bufferToBase64 = (buffer) => {
+  return buffer.toString('base64');
+};
+
+const base64ToBuffer = (base64) => {
+  return Buffer.from(base64, 'base64');
+};
+
 app.post("/tryon", upload.fields([{ name: "humanImage" }, { name: "garmentImage" }]), async (req, res) => {
   try {
     const appClient = await client("alexff91/FitMirror");
@@ -82,19 +91,22 @@ app.post("/tryon", upload.fields([{ name: "humanImage" }, { name: "garmentImage"
     await resizeImage(humanImagePath, humanImageResizedPath, 400, 600);
     await resizeImage(garmentImagePath, garmentImageResizedPath, 400, 600);
 
-    const humanImage = await readLocalFile(humanImageResizedPath);
-    const garmentImage = await readLocalFile(garmentImageResizedPath);
+    const humanImageBuffer = await readLocalFile(humanImageResizedPath);
+    const garmentImageBuffer = await readLocalFile(garmentImageResizedPath);
+
+    const humanImageBase64 = bufferToBase64(humanImageBuffer);
+    const garmentImageBase64 = bufferToBase64(garmentImageBuffer);
 
     // Use provided description or default description
     const garmentDescription = req.body.garmentDescription || "cloth fitting the person shape";
 
     const result = await appClient.predict("/tryon", [
       {
-        "background": humanImage,
+        "background": humanImageBase64,
         "layers": [],
         "composite": null
       },
-      garmentImage,
+      garmentImageBase64,
       garmentDescription,  // Description of garment
       true,  // Use auto-generated mask
       true,  // Use auto-crop & resizing
@@ -109,6 +121,62 @@ app.post("/tryon", upload.fields([{ name: "humanImage" }, { name: "garmentImage"
   }
 });
 
-app.listen(port, () => {
-  console.log(`Try-on service listening at http://localhost:${port}`);
+app.post("/tryon/base64", async (req, res) => {
+  try {
+    const appClient = await client("alexff91/FitMirror");
+
+    const { humanImageBase64, garmentImageBase64, garmentDescription = "cloth fitting the person shape" } = req.body;
+
+    if (!humanImageBase64 || !garmentImageBase64) {
+      return res.status(400).json({ error: "Both humanImageBase64 and garmentImageBase64 are required." });
+    }
+
+    const humanImageBuffer = base64ToBuffer(humanImageBase64);
+    const garmentImageBuffer = base64ToBuffer(garmentImageBase64);
+
+    const humanImagePath = path.join(__dirname, "uploads", "humanImage_from_base64.jpg");
+    const garmentImagePath = path.join(__dirname, "uploads", "garmentImage_from_base64.jpg");
+
+    fs.writeFileSync(humanImagePath, humanImageBuffer);
+    fs.writeFileSync(garmentImagePath, garmentImageBuffer);
+
+    const humanImageResizedPath = path.join(__dirname, "uploads", "humanImage_resized.jpg");
+    const garmentImageResizedPath = path.join(__dirname, "uploads", "garmentImage_resized.jpg");
+
+    await resizeImage(humanImagePath, humanImageResizedPath, 400, 600);
+    await resizeImage(garmentImagePath, garmentImageResizedPath, 400, 600);
+
+    const resizedHumanImageBuffer = await readLocalFile(humanImageResizedPath);
+    const resizedGarmentImageBuffer = await readLocalFile(garmentImageResizedPath);
+
+    const resizedHumanImageBase64 = bufferToBase64(resizedHumanImageBuffer);
+    const resizedGarmentImageBase64 = bufferToBase64(resizedGarmentImageBuffer);
+
+    const result = await appClient.predict("/tryon", [
+      {
+        "background": resizedHumanImageBase64,
+        "layers": [],
+        "composite": null
+      },
+      resizedGarmentImageBase64,
+      garmentDescription,
+      true,
+      true,
+      30,
+      42
+    ]);
+
+    const outputUrl = result.data[0].url;
+    const outputImageResponse = await axios.get(outputUrl, { responseType: 'arraybuffer' });
+    const outputImageBase64 = Buffer.from(outputImageResponse.data, 'binary').toString('base64');
+
+    res.json({ result: outputImageBase64 });
+  } catch (error) {
+    console.error("Error during prediction:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.listen(port, host, () => {
+  console.log(`Try-on service listening at http://${host}:${port}`);
 });
