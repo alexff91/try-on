@@ -190,6 +190,70 @@ app.post("/tryon/base64", async (req, res) => {
   }
 });
 
+
+app.post("/tryon/media", upload.fields([{ name: "humanImage" }, { name: "garmentImage" }]), async (req, res) => {
+  try {
+    console.log("Received /tryon/media request");
+    const appClient = await client("alexff91/FitMirror");
+
+    let humanImagePath;
+    let garmentImagePath;
+    const humanImageResizedPath = path.join(__dirname, "uploads", "humanImage_resized.jpg");
+    const garmentImageResizedPath = path.join(__dirname, "uploads", "garmentImage_resized.jpg");
+
+    if (req.files && req.files.humanImage) {
+      humanImagePath = req.files.humanImage[0].path;
+      console.log(`Human image uploaded: ${humanImagePath}`);
+    } else if (req.body.humanImageURL) {
+      humanImagePath = path.join(__dirname, "uploads", "humanImage.jpg");
+      await downloadImage(req.body.humanImageURL, humanImagePath);
+    }
+
+    if (req.files && req.files.garmentImage) {
+      garmentImagePath = req.files.garmentImage[0].path;
+      console.log(`Garment image uploaded: ${garmentImagePath}`);
+    } else if (req.body.garmentImageURL) {
+      garmentImagePath = path.join(__dirname, "uploads", "garmentImage.jpg");
+      await downloadImage(req.body.garmentImageURL, garmentImagePath);
+    }
+
+    // Resize images
+    await resizeImage(humanImagePath, humanImageResizedPath, 400, 600);
+    await resizeImage(garmentImagePath, garmentImageResizedPath, 400, 600);
+
+    const humanImageBuffer = await readLocalFile(humanImageResizedPath);
+    const garmentImageBuffer = await readLocalFile(garmentImageResizedPath);
+
+    // Use provided description or default description
+    const garmentDescription = req.body.garmentDescription || "cloth fitting the person shape";
+
+    console.log("Sending prediction request to the model");
+    const result = await appClient.predict("/tryon", [
+      {
+        "background": humanImageBuffer,
+        "layers": [],
+        "composite": null
+      },
+      garmentImageBuffer,
+      garmentDescription,  // Description of garment
+      true,  // Use auto-generated mask
+      true,  // Use auto-crop & resizing
+      30,  // Denoising Steps
+      42  // Seed
+    ]);
+
+    console.log("Prediction completed successfully");
+    const outputUrl = result.data[0].url;
+    const outputImageResponse = await axios.get(outputUrl, { responseType: 'arraybuffer' });
+
+    res.setHeader('Content-Type', 'image/png');
+    res.send(outputImageResponse.data);
+  } catch (error) {
+    console.error("Error during prediction:", error.response ? error.response.data : error.message);
+    res.status(500).json({ error: error.response ? error.response.data : error.message });
+  }
+});
+
 app.listen(port, host, () => {
   console.log(`Try-on service listening at http://${host}:${port}`);
 });
