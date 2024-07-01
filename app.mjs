@@ -8,6 +8,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { HfInference } from '@huggingface/inference';
 import dotenv from 'dotenv';
+import rateLimit from 'express-rate-limit';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -74,6 +75,15 @@ const bufferToBase64 = (buffer) => {
 const base64ToBuffer = (base64) => {
   return Buffer.from(base64, 'base64');
 };
+
+// Rate limiting middleware
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: "Too many requests from this IP, please try again later."
+});
+
+app.use(limiter);
 
 app.post("/tryon", upload.fields([{ name: "humanImage" }, { name: "garmentImage" }]), async (req, res) => {
   try {
