@@ -88,7 +88,7 @@ app.use(limiter);
 app.post("/tryon", upload.fields([{ name: "humanImage" }, { name: "garmentImage" }]), async (req, res) => {
   try {
     console.log("Received /tryon request");
-    const appClient = await client("alexff91/FitMirror");
+    const appClient = await client("yisol/IDM-VTON");
 
     let humanImagePath;
     let garmentImagePath;
@@ -147,7 +147,7 @@ app.post("/tryon", upload.fields([{ name: "humanImage" }, { name: "garmentImage"
 app.post("/tryon/base64", async (req, res) => {
   try {
     console.log("Received /tryon/base64 request");
-    const appClient = await client("alexff91/FitMirror");
+    const appClient = await client("yisol/IDM-VTON");
 
     const { humanImageBase64, garmentImageBase64, garmentDescription = "cloth fitting the person shape" } = req.body;
 
@@ -204,7 +204,7 @@ app.post("/tryon/base64", async (req, res) => {
 app.post("/tryon/media", upload.fields([{ name: "humanImage" }, { name: "garmentImage" }]), async (req, res) => {
   try {
     console.log("Received /tryon/media request");
-    const appClient = await client("alexff91/FitMirror");
+    const appClient = await client("yisol/IDM-VTON");
 
     let humanImagePath;
     let garmentImagePath;
