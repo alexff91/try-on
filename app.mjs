@@ -200,7 +200,6 @@ app.post("/tryon/base64", async (req, res) => {
   }
 });
 
-
 app.post("/tryon/media", upload.fields([{ name: "humanImage" }, { name: "garmentImage" }]), async (req, res) => {
   try {
     console.log("Received /tryon/media request");
@@ -253,6 +252,59 @@ app.post("/tryon/media", upload.fields([{ name: "humanImage" }, { name: "garment
     ]);
 
     console.log("Prediction completed successfully");
+    const outputUrl = result.data[0].url;
+    const outputImageResponse = await axios.get(outputUrl, { responseType: 'arraybuffer' });
+
+    res.setHeader('Content-Type', 'image/png');
+    res.send(outputImageResponse.data);
+  } catch (error) {
+    console.error("Error during prediction:", error.response ? error.response.data : error.message);
+    res.status(500).json({ error: error.response ? error.response.data : error.message });
+  }
+});
+
+// New endpoint accepting 2 URLs and text, and returning media
+app.post("/tryon/url", async (req, res) => {
+  try {
+    console.log("Received /tryon/url request");
+    const appClient = await client("yisol/IDM-VTON");
+
+    const { humanImageURL, garmentImageURL, garmentDescription = "cloth fitting the person shape" } = req.body;
+
+    if (!humanImageURL || !garmentImageURL) {
+      return res.status(400).json({ error: "Both humanImageURL and garmentImageURL are required." });
+    }
+
+    const humanImagePath = path.join(__dirname, "uploads", "humanImage_from_url.jpg");
+    const garmentImagePath = path.join(__dirname, "uploads", "garmentImage_from_url.jpg");
+
+    await downloadImage(humanImageURL, humanImagePath);
+    await downloadImage(garmentImageURL, garmentImagePath);
+
+    const humanImageResizedPath = path.join(__dirname, "uploads", "humanImage_resized.jpg");
+    const garmentImageResizedPath = path.join(__dirname, "uploads", "garmentImage_resized.jpg");
+
+    await resizeImage(humanImagePath, humanImageResizedPath, 400, 600);
+    await resizeImage(garmentImagePath, garmentImageResizedPath, 400, 600);
+
+    const resizedHumanImageBuffer = await readLocalFile(humanImageResizedPath);
+    const resizedGarmentImageBuffer = await readLocalFile(garmentImageResizedPath);
+
+    console.log("Sending prediction request to the model");
+    const result = await appClient.predict("/tryon", [
+      {
+        "background": resizedHumanImageBuffer,
+        "layers": [],
+        "composite": null
+      },
+      resizedGarmentImageBuffer,
+      garmentDescription,
+      true,
+      true,
+      30,
+      42
+    ]);
+
     const outputUrl = result.data[0].url;
     const outputImageResponse = await axios.get(outputUrl, { responseType: 'arraybuffer' });
 
