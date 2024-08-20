@@ -29,11 +29,13 @@ import { HfInference } from '@huggingface/inference';
 
 const hf = new HfInference(process.env.HUGGING_FACE_API_KEY); // Make sure the API key is available
 
-
+// Helper functions with logs
 const readLocalFile = (filePath) => {
+  console.log(`Reading local file: ${filePath}`);
   return new Promise((resolve, reject) => {
     fs.readFile(filePath, (err, data) => {
       if (err) {
+        console.error(`Error reading file: ${filePath}`, err);
         reject(err);
       } else {
         resolve(data);
@@ -72,10 +74,12 @@ const resizeImage = async (inputPath, outputPath, width, height) => {
 };
 
 const bufferToBase64 = (buffer) => {
+  console.log(`Converting buffer to base64`);
   return buffer.toString('base64');
 };
 
 const base64ToBuffer = (base64) => {
+  console.log(`Converting base64 to buffer`);
   return Buffer.from(base64, 'base64');
 };
 
@@ -89,6 +93,7 @@ const limiter = rateLimit({
 app.use(limiter);
 
 const getModelUrlByType = (type) => {
+  console.log(`Getting model URL for type: ${type}`);
   switch (type) {
     case 'up':
       return "alexff91/FitMirrorUp";
@@ -97,6 +102,7 @@ const getModelUrlByType = (type) => {
     case 'dress':
       return "alexff91/FitMirror-Dress";
     default:
+      console.error("Invalid type parameter. Allowed values are 'up', 'down', or 'dress'.");
       throw new Error("Invalid type parameter. Allowed values are 'up', 'down', or 'dress'.");
   }
 };
